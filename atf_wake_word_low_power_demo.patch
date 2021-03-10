@@ -1,0 +1,233 @@
+diff --git a/plat/imx/imx8m/ddr/clock.c b/plat/imx/imx8m/ddr/clock.c
+old mode 100644
+new mode 100755
+index b724d2f60..583d82f96
+--- a/plat/imx/imx8m/ddr/clock.c
++++ b/plat/imx/imx8m/ddr/clock.c
+@@ -8,13 +8,24 @@
+ 
+ #include <lib/mmio.h>
+ #include <platform_def.h>
++#include <stdbool.h>
+ 
++#define IMX_CCM_CORE_BASE			(IMX_CCM_BASE + 0x8000)
++#define IMX_CCM_BUS_BASE			(IMX_CCM_BASE + 0x8800)
+ #define IMX_CCM_IP_BASE				(IMX_CCM_BASE + 0xa000)
+ #define DRAM_SEL_CFG				(IMX_CCM_BASE + 0x9800)
+ #define CCM_IP_CLK_ROOT_GEN_TAGET(i)		(IMX_CCM_IP_BASE + 0x80 * (i) + 0x00)
+ #define CCM_IP_CLK_ROOT_GEN_TAGET_SET(i)	(IMX_CCM_IP_BASE + 0x80 * (i) + 0x04)
+ #define CCM_IP_CLK_ROOT_GEN_TAGET_CLR(i)	(IMX_CCM_IP_BASE + 0x80 * (i) + 0x08)
+ 
++#define CCM_CORE_CLK_ROOT_GEN_TAGET(i)		(IMX_CCM_CORE_BASE + 0x80 * (i) + 0x00)
++#define CCM_CORE_CLK_ROOT_GEN_TAGET_SET(i)	(IMX_CCM_CORE_BASE + 0x80 * (i) + 0x04)
++#define CCM_CORE_CLK_ROOT_GEN_TAGET_CLR(i)	(IMX_CCM_CORE_BASE + 0x80 * (i) + 0x08)
++
++#define CCM_BUS_CLK_ROOT_GEN_TAGET(i)		(IMX_CCM_BUS_BASE + 0x80 * (i) + 0x00)
++#define CCM_BUS_CLK_ROOT_GEN_TAGET_SET(i)	(IMX_CCM_BUS_BASE + 0x80 * (i) + 0x04)
++#define CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(i)	(IMX_CCM_BUS_BASE + 0x80 * (i) + 0x08)
++
+ void ddr_pll_bypass_100mts(void)
+ {
+ 	/* change the clock source of dram_alt_clk_root to source 2 --100MHz */
+@@ -128,3 +139,94 @@ void dram_clock_switch(unsigned int target_drate, bool bypass_mode)
+ 		dram_pll_init(target_drate);
+ 	}
+ }
++
++void bus_freq_dvfs(bool low_bus)
++{
++	if (low_bus) {
++		/* disable HSIO CCGR */
++		mmio_write_32(0x30384450, 0x0);
++		/* disable the sim enet CCGR */
++		mmio_write_32(0x30384400, 0x0);
++		/* disable the sim_s CCGR */
++		mmio_write_32(0x30384430, 0x0);
++		/* disable the DISP MIX CCGR */
++		mmio_write_32(0x303845d0, 0x0);
++
++		/* MAIN AXI bypass to 24MHz OSC*/
++		mmio_write_32(0x30388800, 0x10000000);
++		/* AHB bypass to 24MHz OSC */
++		mmio_write_32(0x30389000, 0x10000000);
++		/* audio AHB bypass to 24MHz OSC */
++		mmio_write_32(0x30389100, 0x10000000);
++		/* GIC bypass to 24MHz OSC */
++		mmio_write_32(0x3038b200, 0x10000000);
++		/* bypass the ARM clock */
++		mmio_write_32(CCM_CORE_CLK_ROOT_GEN_TAGET_CLR(0), (0x7 << 24));
++
++		/* disable the ENET AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(1), (1 << 28));
++		/* disable the NAND_USDHC BUS ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(2), (1 << 28));
++		/* disable the VPU BUS ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(3), (1 << 28));
++		/* disable the DISP AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(4), (1 << 28));
++		/* disable the DISP APB ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(5), (1 << 28));
++		/* disable the GPU AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(8), (1 << 28));
++		/* disable the GPU AHB ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_CLR(9), (1 << 28));
++		/* disable the DRAM AHB ROOT */
++		mmio_write_32(CCM_IP_CLK_ROOT_GEN_TAGET_CLR(1), (1 << 28));
++
++		/* disable the SYSTEM PLL2 */
++		mmio_write_32(0x30360104, 0x80000000);
++		
++		/* disable the DRAM PLL */
++		mmio_write_32(0x30360050, 0x80000000);
++	} else {
++		/* enable the SYSTEM PLL2 */
++		mmio_write_32(0x30360104, 0x8aaaaa00);
++		
++		/* enable the DRAM PLL */
++		mmio_write_32(0x30360050, 0x80002200);
++		while(!(mmio_read_32(0x30360050) & (1U << 31)));
++
++		/* GIC unbypass */
++		mmio_write_32(0x3038b200, 0x13000000);
++
++		/* MAIN AXI unbypass */
++		mmio_write_32(0x30388800, 0x11000000);
++		/* AHB unbypass */
++		mmio_write_32(0x30389000, 0x11000000);
++		/* audio AHB bypass to 24MHz OSC */
++		mmio_write_32(0x30389100, 0x11000000);
++
++		/* enable the ENET AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(1), (1 << 28));
++		/* enable the NAND_USDHC BUS ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(2), (1 << 28));
++		/* enable the VPU BUS ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(3), (1 << 28));
++		/* enable the DISP AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(4), (1 << 28));
++		/* enable the DISP APB ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(5), (1 << 28));
++		/* enable the GPU AXI ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(8), (1 << 28));
++		/* enable the GPU AHB ROOT */
++		mmio_write_32(CCM_BUS_CLK_ROOT_GEN_TAGET_SET(9), (1 << 28));
++		/* enable the DRAM AHB ROOT */
++		mmio_write_32(CCM_IP_CLK_ROOT_GEN_TAGET_SET(1), (1 << 28));
++
++		/* enable HSIO CCGR */
++ 		mmio_write_32(0x30384450, 0x2);
++		/* disable the sim enet CCGR */
++		mmio_write_32(0x30384400, 0x2);
++		/* disable the sim_s CCGR */
++		mmio_write_32(0x30384430, 0x2);
++		/* disable the DISP MIX CCGR */
++		mmio_write_32(0x303845d0, 0x2);
++	}
++}
+diff --git a/plat/imx/imx8m/ddr/dram.c b/plat/imx/imx8m/ddr/dram.c
+old mode 100644
+new mode 100755
+index 333fbabab..f63b5cb01
+--- a/plat/imx/imx8m/ddr/dram.c
++++ b/plat/imx/imx8m/ddr/dram.c
+@@ -31,7 +31,7 @@ static uint8_t dram_timing_saved[13 * 1024] __aligned(8);
+ 
+ static volatile uint32_t wfe_done;
+ static volatile bool wait_ddrc_hwffc_done = true;
+-static unsigned int dev_fsp = 0x1;
++unsigned int dev_fsp = 0x1;
+ 
+ static uint32_t fsp_init_reg[3][4] = {
+ 	{ DDRC_INIT3(0), DDRC_INIT4(0), DDRC_INIT6(0), DDRC_INIT7(0) },
+diff --git a/plat/imx/imx8m/gpc_common.c b/plat/imx/imx8m/gpc_common.c
+old mode 100644
+new mode 100755
+index 62ed3ba9d..7ac4d9130
+--- a/plat/imx/imx8m/gpc_common.c
++++ b/plat/imx/imx8m/gpc_common.c
+@@ -172,9 +172,8 @@ void imx_set_cluster_powerdown(unsigned int last_core, uint8_t power_state)
+ 
+ 	if (!is_local_state_run(power_state)) {
+ 		/* config C0~1's LPM, enable a53 clock off in LPM */
+-		mmio_clrsetbits_32(IMX_GPC_BASE + LPCR_A53_BSC, A53_CLK_ON_LPM,
+-			LPM_MODE(power_state));
+-		/* config C2-3's LPM */
++		
++                /* config C2-3's LPM */
+ 		mmio_setbits_32(IMX_GPC_BASE + LPCR_A53_BSC2, LPM_MODE(power_state));
+ 
+ 		/* enable PLAT/SCU power down */
+@@ -191,7 +190,6 @@ void imx_set_cluster_powerdown(unsigned int last_core, uint8_t power_state)
+ 		/* clear the slot and ack for cluster power down */
+ 		imx_a53_plat_slot_config(false);
+ 		/* reverse the cluster level setting */
+-		mmio_clrsetbits_32(IMX_GPC_BASE + LPCR_A53_BSC, 0xf, A53_CLK_ON_LPM);
+ 		mmio_clrbits_32(IMX_GPC_BASE + LPCR_A53_BSC2, 0xf);
+ 
+ 		/* clear PLAT/SCU power down */
+@@ -297,9 +295,6 @@ struct pll_override pll[MAX_PLL_NUM] = {
+ 	{.reg = 0x50, .override_mask = (1 << 12) | (1 << 8), },
+ 	{.reg = 0x64, .override_mask = (1 << 10) | (1 << 8), },
+ 	{.reg = 0x74, .override_mask = (1 << 10) | (1 << 8), },
+-	{.reg = 0x84, .override_mask = (1 << 10) | (1 << 8), },
+-	{.reg = 0x94, .override_mask = 0x5555500, },
+-	{.reg = 0x104, .override_mask = 0x5555500, },
+ 	{.reg = 0x114, .override_mask = 0x500, },
+ };
+ 
+diff --git a/plat/imx/imx8m/imx8m_psci_common.c b/plat/imx/imx8m/imx8m_psci_common.c
+old mode 100644
+new mode 100755
+index 452958cec..18b717fb1
+--- a/plat/imx/imx8m/imx8m_psci_common.c
++++ b/plat/imx/imx8m/imx8m_psci_common.c
+@@ -29,6 +29,9 @@
+ #pragma weak imx_domain_suspend_finish
+ #pragma weak imx_get_sys_suspend_power_state
+ 
++extern unsigned int dev_fsp;
++extern void bus_freq_dvfs(bool low_bus);
++
+ int imx_validate_ns_entrypoint(uintptr_t ns_entrypoint)
+ {
+ 	/* The non-secure entrypoint should be in RAM space */
+@@ -126,8 +129,16 @@ void imx_domain_suspend(const psci_power_state_t *target_state)
+ 			dram_enter_retention();
+ 			imx_anamix_override(true);
+ 			imx_noc_wrapper_pre_suspend(core_id);
+-		}
+-	imx_set_sys_wakeup(core_id, true);
++		} else {
++
++            imx_set_sys_lpm(core_id, true);			
++            lpddr4_swffc(&dram_info, dev_fsp, 0x1);
++            dev_fsp = (~dev_fsp) & 0x1;
++			/* reduce bus freq */
++			bus_freq_dvfs(true);
++        }
++        
++        imx_set_sys_wakeup(core_id, true);
+ 	}
+ }
+ 
+@@ -143,7 +154,13 @@ void imx_domain_suspend_finish(const psci_power_state_t *target_state)
+ 			dram_exit_retention();
+ 			imx_set_sys_lpm(core_id, false);
+ 		}
+-	imx_set_sys_wakeup(core_id, false);
++        else {
++			bus_freq_dvfs(false);
++            lpddr4_swffc(&dram_info, dev_fsp, 0x0);
++            dev_fsp = (~dev_fsp) & 0x1;
++            imx_set_sys_lpm(core_id, false);
++        }
++        imx_set_sys_wakeup(core_id, false);
+ 	}
+ 
+ 	if (!is_local_state_run(CLUSTER_PWR_STATE(target_state))) {
+diff --git a/plat/imx/imx8m/imx8mm/include/platform_def.h b/plat/imx/imx8m/imx8mm/include/platform_def.h
+old mode 100644
+new mode 100755
+diff --git a/plat/imx/imx8m/include/dram.h b/plat/imx/imx8m/include/dram.h
+old mode 100644
+new mode 100755
