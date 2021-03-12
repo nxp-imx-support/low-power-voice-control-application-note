@@ -5,7 +5,7 @@ This is the materials used in the application note: i.MX 8M Mini Heterogenous Lo
 
 ## Version
 
-The M4 app "wake_word_low_power_demo" was created on the MCUxpresso SDK_2.8.0.
+The M4 app "wake_word_low_power_demo" was created on the MCUxpresso SDK_2.8.0. <br/>;
 The kernel and atf patches work on Linux 5.4.47_2.2.0
 
 ## Link
@@ -14,6 +14,6 @@ For further information on this demo please check the Application Note document 
 
 ## License
 
-License BSD-3-Clause : wake_word_low_power_demo, atf_wake_word_low_power_demo.patch
-License GPL-2.0 : kernel_wake_word_low_power_demo.patch
+License BSD-3-Clause: wake_word_low_power_demo, atf_wake_word_low_power_demo.patch <br/>;
+License GPL-2.0: kernel_wake_word_low_power_demo.patch
 
