@@ -12,4 +12,8 @@ The kernel and atf patches work on Linux 5.4.47_2.2.0
 
 For further information on this demo please check the Application Note document "i.MX 8M Mini Heterogenous Low Power Voice Control Solution" available on nxp.com.
 
+## License
+
+License BSD-3-Clause : wake_word_low_power_demo, atf_wake_word_low_power_demo.patch
+License GPL-2.0 : kernel_wake_word_low_power_demo.patch
 
